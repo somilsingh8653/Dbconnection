@@ -1,87 +1,80 @@
 const express = require("express");
 const ConnectDB = require("./src/config/database");
+const {validateSignUpDate}=require("./src/utils/validation");
+const bcrypt = require('bcrypt');
+const User = require("./src/models/user");
 
 const app = express();
 
-const User = require("./src/models/user");
+
 
 app.use(express.json());
 
+//Signup
 
-//feed Api
-
-app.get("/feed" , async(req,res)=>{
-
+app.post("/signup", async(req,res)=>{
     try{
-     const user = await User.find({});
-     res.send(user);
+
+        //validation of data
+        validateSignUpDate(req);
+
+        const { firstName,lastName,emailId,password }=req.body;
+
+        //encrypt the password
+        const passwordhash =  await bcrypt.hash(password,10);
+        console.log(passwordhash);
+
+        //create a new instance of the model
+        const user = new User({
+            firstName,
+            lastName,
+            emailId,
+            password:passwordhash,
+        });
+
+        await user.save();
+        res.send("User is added Successfully");
+
     }catch(err){
-     res.status(400).send("Something went wrong");
-    }
-});
-
-
-//get the data
-app.get("/user", async(req , res)=>{
-
-    const userEmail = req.body.emailId;
-
-    try{
-        
-        const users = await User.find({emailId:userEmail});
-        if(users.length === 0){
-            res.status(400).send("user not found")
-        }else{
-            res.send(users);
-        }
-    }catch(err){
-         res.status(400).send("Error saving the User"+err.message);
-     }
-})
-
-
-//Post the data into database
-
-app.post("/user", async(req,res)=>{
-
-    const user = new User(req.body);
-    try{
-         await user.save();
-         res.send("User Added Successfully");
-    }catch(err){
-        res.status(400).send("Error saving the User"+err.message);
+       res.status(400).send("ERROR: "+err.message);
     }
 })
 
-//delete the data 
-app.delete("/user", async(req,res)=>{
-    const userId = req.body.userId;
+//login
+
+app.post("/login", async(req,res)=>{
+
     try{
+        const {emailId,password}=req.body;
+    
+    //email find in database
+    const user = await User.findOne({emailId:emailId});
 
-        const user = await User.findByIdAndDelete(userId);
-        res.send("user deleted Successfuly");
-
-    }catch(err){
-       res.status(400).send("Somting went wrong");
+    if(!user){
+        throw new Error("Email id is not found!!");
     }
+    //password find in databse
+    const isPasswordvalid = await bcrypt.compare(password,user.password);
+
+    if(isPasswordvalid){
+        res.send("Login successfull!!");
+    }
+    else{
+        throw new Error("Password is invalid!!");
+    }
+    }catch(err){
+        res.status(400).send("ERROR"+err.message);
+    }
+  
+
 })
 
-//Update data of the User
-app.patch("/user",async(req,res)=>{
-  const userId = req.body.userId;
-  const data = req.body;
-  try{
-    const user = await User.findByIdAndUpdate({_id:userId}, data);
-    console.log(user);
-    res.send("User update successfully!!");
- 
-  }catch(err){
-    res.status(400).send("Something went wrong");
-  }
-})
+//profile
 
 
-ConnectDB().then(()=>{
+
+ConnectDB()
+.then(()=>{
     console.log("DB connection established!!");
 })
 .catch(()=>{
